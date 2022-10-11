@@ -198,6 +198,20 @@ def prettyString(spreadSheet: Seq[Seq[Value]]): String =
 def prettyString(v: Value): String = v match
   case Value.Num(d)  => f"$d%.2f"
   case Value.Lit(s)  => s"'$s"
+def prettyFormula(f: Formula, surround: Boolean = false): String =
+  import Formula._
+  f match
+    case Cell(col, row) => s"${col}${row}"
+    case Num(d)         => f"$d%.2f"
+    case Add(l, r) =>
+      val res = s"${prettyFormula(l)}+${prettyFormula(r)}"
+      if surround then s"($res)" else res
+    case Sub(l, r) =>
+      val res = s"${prettyFormula(l)}-${prettyFormula(r)}"
+      if surround then s"($res)" else res
+    case Mul(l, r) => s"${prettyFormula(l, true)}*${prettyFormula(r, true)}"
+    case Div(l, r) => s"${prettyFormula(l, true)}/${prettyFormula(r, true)}"
+
 enum Token:
   case PLUS
   case MINUS
