@@ -49,11 +49,78 @@ def parseCell(cell: String): Value | Error =
   if cell.isEmpty() then Num(0.0)
   else
     cell.charAt(0) match
-      case '='  => Form(parseFormula(cell.tail))
+      case '=' =>
+        parseFormula(cell.tail) match
+          case e: Error   => e
+          case f: Formula => Form(f)
       case '\'' => Lit(cell.tail)
       case _ =>
         try Num(cell.toDouble)
         catch case _: NumberFormatException => s"unable to parse cell with value $cell"
+
+def parseFormula(s: String): Formula | Error = tokenize(s) match
+  case e: Error        => e
+  case ts: List[Token] => parseTokens(ts)
+
+//format: off
+/** Parsing tokens according to the following expression grammar
+  *
+  * E -> TE'
+  * E' -> +TE' | -TE' | ε
+  * T -> FT'
+  * T' -> *FT' | /FT' | ε
+  * F -> Num | (E)
+  *
+  * from
+  * http://www.shivamkapoor.com/blogs/technology/2020/06/02/recursive-descent-parsers-in-scala-1-writing-context-free-grammar/
+  */
+//format: on
+def parseTokens(tokens: List[Token]): Formula | Error =
+  import Token._
+
+  def parseFactor(ts: List[Token]): (Formula, List[Token]) | Error = ts match
+    case Num(d) :: tss         => (Formula.Num(d), tss)
+    case Cell(col, row) :: tss => (Formula.Cell(col, row), tss)
+    case OPENBR :: tss =>
+      parseExpr(tss) match
+        case e: Error => e
+        case (expr: Formula, ts3) =>
+          ts3 match
+            case CLOSEBR :: ts4 => (expr, ts4)
+            case _              => "can't close parentheses during parsing"
+    case _ => s"unable to parse factor, found $ts"
+  end parseFactor
+
+  def parseTerm(ts: List[Token]): (Formula, List[Token]) | Error = parseFactor(ts) match
+    case e: Error => e
+    case (l, MUL :: rest) =>
+      parseTerm(rest) match
+        case e: Error  => e
+        case (r, rest) => (Formula.Mul(l, r), rest)
+    case (l, DIV :: rest) =>
+      parseTerm(rest) match
+        case e: Error  => e
+        case (r, rest) => (Formula.Div(l, r), rest)
+    case (f, rest) => (f, rest)
+
+  def parseExpr(ts: List[Token]): (Formula, List[Token]) | Error = parseTerm(ts) match
+    case e: Error => e
+    case (l, PLUS :: rest) =>
+      parseExpr(rest) match
+        case e: Error  => e
+        case (r, rest) => (Formula.Add(l, r), rest)
+    case (l, MINUS :: rest) =>
+      parseExpr(rest) match
+        case e: Error  => e
+        case (r, rest) => (Formula.Sub(l, r), rest)
+    case (f, rest) => (f, rest)
+
+  parseExpr(tokens) match
+    case e: Error => e
+    case (f, Nil) => f
+    case (_, xs)  => s"unable to parse $tokens, still have $xs remaining"
+
+end parseTokens
 
 def tokenize(s: String): List[Token] | Error =
   import scala.util.matching.Regex
