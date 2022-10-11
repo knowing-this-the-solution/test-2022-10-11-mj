@@ -55,7 +55,75 @@ def parseCell(cell: String): Value | Error =
         try Num(cell.toDouble)
         catch case _: NumberFormatException => s"unable to parse cell with value $cell"
 
-def parseFormula(s: String): Formula = Formula.Num(0.0)
+def tokenize(s: String): List[Token] | Error =
+  import scala.util.matching.Regex
+  import Token._
+
+  val num = """(^[\-\+]?[0-9]*\.?[0-9]+([eE][\-\+]?[0-9]+)?)(.*)""".r
+  val plus = """\+(.*)""".r
+  val minus = """\-(.*)""".r
+  val mul = """\*(.*)""".r
+  val div = """/(.*)""".r
+  val openbr = """\((.*)""".r
+  val closebr = """\)(.*)""".r
+  val cell = """(([A-Z])(\d{1,2}))(.*)""".r
+
+  // in the inner method we look for arithmetic operators first
+  // so as to avoid ambiguities with parsing numbers
+  def tokenizeRest(t: String): List[Token] | Error = t match
+    case "" => Nil
+    case plus(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => PLUS :: ls
+    case minus(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => MINUS :: ls
+    case mul(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => MUL :: ls
+    case div(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => DIV :: ls
+    case openbr(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => OPENBR :: ls
+    case closebr(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => CLOSEBR :: ls
+    case num(num, _, rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => Num(num.toDouble) :: ls
+    case cell(_, col, row, rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => Cell(col, row.toInt) :: ls
+    case _ => s"unrecognized token $t"
+  end tokenizeRest
+
+  s match
+    case num(num, _, rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => Num(num.toDouble) :: ls
+    case cell(_, col, row, rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => Cell(col, row.toInt) :: ls
+    case openbr(rest) =>
+      tokenizeRest(rest) match
+        case e: Error        => e
+        case ls: List[Token] => OPENBR :: ls
+    case "" => Nil
+    case _  => s"unrecognized start of formula: $s"
+
+end tokenize
 
 def prettyString(spreadSheet: Seq[Seq[Value]]): String =
   spreadSheet.map(row => row.map(prettyString).mkString(",")).mkString("\n")
@@ -63,7 +131,15 @@ def prettyString(spreadSheet: Seq[Seq[Value]]): String =
 def prettyString(v: Value): String = v match
   case Value.Num(d)  => f"$d%.2f"
   case Value.Lit(s)  => s"'$s"
-  case Value.Form(f) => "asdf"
+enum Token:
+  case PLUS
+  case MINUS
+  case MUL
+  case DIV
+  case OPENBR
+  case CLOSEBR
+  case Cell(col: String, row: Int)
+  case Num(d: Double)
 
 enum Value:
   case Num(d: Double)
