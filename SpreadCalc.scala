@@ -18,10 +18,8 @@ def main(args: Array[String]): Unit =
         else
           parse(csvArray) match
             case e: Error =>
-              Console.err.println(
-                s"ERROR: $fileName contains rows with mismatching number of columns"
-              )
-            case s: Seq[Seq[Value]] => println(prettyString(s))
+              Console.err.println(s"ERROR: $e")
+            case s: Seq[Seq[Value]] => println(prettySpreadSheet(s))
 
 /** Reads a csv file. We assume the csv file is well-formed, i.e. all commas are separators and all
   * `\n` are linebreaks
@@ -46,7 +44,7 @@ def parse(csvArray: Seq[Seq[String]]): Seq[Seq[Value]] | Error =
 
 def parseCell(cell: String): Value | Error =
   import Value._
-  if cell.isEmpty() then Num(0.0)
+  if cell.isEmpty() then Value.None
   else
     cell.charAt(0) match
       case '=' =>
@@ -192,12 +190,15 @@ def tokenize(s: String): List[Token] | Error =
 
 end tokenize
 
-def prettyString(spreadSheet: Seq[Seq[Value]]): String =
-  spreadSheet.map(row => row.map(prettyString).mkString(",")).mkString("\n")
+def prettySpreadSheet(spreadSheet: Seq[Seq[Value]]): String =
+  spreadSheet.map(row => row.map(prettyValue).mkString(",")).mkString("\n")
 
-def prettyString(v: Value): String = v match
+def prettyValue(v: Value): String = v match
   case Value.Num(d)  => f"$d%.2f"
   case Value.Lit(s)  => s"'$s"
+  case Value.Form(f) => s"=${prettyFormula(f)}"
+  case Value.None    => ""
+
 def prettyFormula(f: Formula, surround: Boolean = false): String =
   import Formula._
   f match
@@ -226,6 +227,7 @@ enum Value:
   case Num(d: Double)
   case Lit(s: String)
   case Form(f: Formula)
+  case None
 
 enum Formula:
   case Cell(col: String, row: Int)
