@@ -168,7 +168,7 @@ def tokenize(s: String): List[Token] | Error =
     case cell(_, col, row, rest) =>
       tokenizeRest(rest) match
         case e: Error        => e
-        case ls: List[Token] => Cell(col, row.toInt) :: ls
+        case ls: List[Token] => Cell(col(0), row.toInt) :: ls
     case _ => s"unrecognized token $t"
   end tokenizeRest
 
@@ -180,7 +180,7 @@ def tokenize(s: String): List[Token] | Error =
     case cell(_, col, row, rest) =>
       tokenizeRest(rest) match
         case e: Error        => e
-        case ls: List[Token] => Cell(col, row.toInt) :: ls
+        case ls: List[Token] => Cell(col(0), row.toInt) :: ls
     case openbr(rest) =>
       tokenizeRest(rest) match
         case e: Error        => e
@@ -220,7 +220,7 @@ enum Token:
   case DIV
   case OPENBR
   case CLOSEBR
-  case Cell(col: String, row: Int)
+  case Cell(col: Char, row: Int)
   case Num(d: Double)
 
 enum Value:
@@ -230,7 +230,7 @@ enum Value:
   case None
 
 enum Formula:
-  case Cell(col: String, row: Int)
+  case Cell(col: Char, row: Int)
   case Num(d: Double)
   case Add(l: Formula, r: Formula)
   case Sub(l: Formula, r: Formula)
