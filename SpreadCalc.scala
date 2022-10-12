@@ -19,7 +19,8 @@ def main(args: Array[String]): Unit =
           parse(csvArray) match
             case e: Error =>
               Console.err.println(s"ERROR: $e")
-            case s: Seq[Seq[Value]] => println(prettySpreadSheet(s))
+            case s: Seq[Seq[Value]] =>
+              println(prettySpreadSheet(eval(s)))
 
 /** Reads a csv file. We assume the csv file is well-formed, i.e. all commas are separators and all
   * `\n` are linebreaks
@@ -32,6 +33,59 @@ def readCsv(fileName: String): Seq[Seq[String]] =
     .getLines()
     .map(line => line.split("""\s*,\s*""", -1).toSeq)
     .toSeq
+
+/** Evaluates a spreadsheet
+  *
+  * FIXME: Dimension or cyclic errors are not detected
+  */
+def eval(spreadSheet: Seq[Seq[Value]]): Seq[Seq[Value]] =
+  val spreadArray: Array[Array[Value]] = spreadSheet.map(_.toArray).toArray
+
+  val res: Array[Array[Value]] = Array.ofDim(spreadArray.size, spreadArray(0).size)
+
+  def evalSingle(colIdx: Int, rowIdx: Int): Value = res(rowIdx)(colIdx) match
+    case null =>
+      val evalled: Value = spreadArray(rowIdx)(colIdx) match
+        case n: Value.Num  => n
+        case s: Value.Lit  => s
+        case Value.Form(f) => evalFormula(f)
+        case v             => v
+
+      res(rowIdx)(colIdx) = evalled
+      evalled
+
+    case v => v
+  end evalSingle
+
+  // FIXME - error out in case of division by zero
+  def evalFormula(f: Formula): Value = f match
+    case Formula.Cell(col, row) =>
+      evalSingle(col - 'A', row - 1)
+    case Formula.Num(d) => Value.Num(d)
+    case Formula.Add(l, r) =>
+      (evalFormula(l), evalFormula(r)) match
+        case (Value.Num(a), Value.Num(b)) => Value.Num(a + b)
+        case _                            => Value.Form(f)
+    case Formula.Sub(l, r) =>
+      (evalFormula(l), evalFormula(r)) match
+        case (Value.Num(a), Value.Num(b)) => Value.Num(a - b)
+        case _                            => Value.Form(f)
+    case Formula.Mul(l, r) =>
+      (evalFormula(l), evalFormula(r)) match
+        case (Value.Num(a), Value.Num(b)) => Value.Num(a * b)
+        case _                            => Value.Form(f)
+    case Formula.Div(l, r) =>
+      (evalFormula(l), evalFormula(r)) match
+        case (Value.Num(a), Value.Num(b)) => Value.Num(a / b)
+        case _                            => Value.Form(f)
+  end evalFormula
+
+  for colIdx <- 0 until spreadArray(0).size do
+    for rowIdx <- 0 until spreadArray.size do evalSingle(colIdx, rowIdx)
+
+  res.map(_.toSeq).toSeq
+
+end eval
 
 def parse(csvArray: Seq[Seq[String]]): Seq[Seq[Value]] | Error =
   csvArray.map { row =>
